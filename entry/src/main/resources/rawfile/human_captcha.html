@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://static.geetest.com https://*.geetest.com https://*.geevisit.com; connect-src https://*.geetest.com https://*.geevisit.com; img-src data: blob: https://*.geetest.com https://*.geevisit.com; style-src 'unsafe-inline' https://*.geetest.com https://*.geevisit.com; font-src data: https://*.geetest.com; frame-src https://*.geetest.com https://*.geevisit.com"><style>body{font:14px sans-serif;background:#f7f8fa;color:#414750;margin:0;padding:20px;text-align:center}#captcha{margin:20px auto;min-height:48px}#message{font-size:12px;color:#939aa4;line-height:1.8}button{border:0;background:#f5ce59;padding:12px 24px;border-radius:22px}</style></head>
+<body><strong>请手动完成人机验证</strong><div id="captcha"></div><p id="message">正在加载极验，请稍候……</p><button onclick="location.reload()">重新加载验证</button>
+<script>
+(function(){
+'use strict';
+var submitted=false;
+function fail(){document.getElementById('message').textContent='验证服务加载失败，请检查网络后重新加载，或使用官方桌面网页。';}
+var script=document.createElement('script');
+script.src='https://static.geetest.com/v4/gt4.js';
+script.onerror=fail;
+script.onload=function(){
+ if(typeof initGeetest4!=='function'){fail();return;}
+ // Public App CAPTCHA ID documented by the reference login implementation.
+ // The user performs all challenge interactions; no solving or bypass logic.
+ initGeetest4({captchaId:'3f7e2d848ce0cb7e7d019d621e556ce2',product:'float',language:'zho',protocol:'https://'},function(captcha){
+  captcha.appendTo('#captcha');
+  captcha.onReady(function(){document.getElementById('message').textContent='点击上方验证按钮，并根据提示完成操作。';});
+  captcha.onSuccess(function(){
+   var result=captcha.getValidate();
+   if(!result||submitted){return;}
+   if(!window.KuroCaptcha||typeof window.KuroCaptcha.complete!=='function'){fail();return;}
+   submitted=true;
+   document.getElementById('message').textContent='验证结果正在交给库街区确认，请勿重复操作。';
+   window.KuroCaptcha.complete(JSON.stringify(result));
+  });
+  captcha.onError(fail);
+ });
+};
+document.head.appendChild(script);
+})();
+</script></body></html>

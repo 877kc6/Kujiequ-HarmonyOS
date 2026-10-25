@@ -1,0 +1,7 @@
+{
+  "modelVersion": "5.0.0",
+  "name": "kujiequ-native",
+  "version": "1.0.0",
+  "description": "Independent ArkTS community client",
+  "dependencies": {}
+}

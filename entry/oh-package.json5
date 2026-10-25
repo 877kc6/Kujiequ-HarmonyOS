@@ -1,0 +1,11 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "Native community entry",
+  "main": "",
+  "author": "Kevin",
+  "license": "MIT",
+  "dependencies": {
+    "libcapture_probe.so": "file:./src/main/cpp/types/libcapture_probe"
+  }
+}

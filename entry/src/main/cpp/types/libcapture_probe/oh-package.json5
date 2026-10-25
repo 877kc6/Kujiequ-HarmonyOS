@@ -1,0 +1,6 @@
+{
+  "name": "libcapture_probe.so",
+  "version": "1.0.0",
+  "description": "Native local VPN diagnostic only",
+  "types": "./index.d.ts"
+}

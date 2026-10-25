@@ -1,0 +1,10 @@
+本次修复根据 2026-10-25 实际编译日志完成。
+如果已有本机签名配置，请只覆盖下列 5 个文件，不要覆盖 build-profile.json5 或 local.properties：
+
+1. oh-package.json5
+2. entry/src/main/ets/pages/Post.ets
+3. entry/src/main/ets/pages/Settings.ets
+4. entry/src/main/ets/pages/Index.ets
+5. entry/src/main/resources/base/element/string.json
+
+保存后同步工程，再重新构建。此包保留 API 26。已执行静态检查和服务逻辑测试，未在本环境执行 Hvigor 编译。

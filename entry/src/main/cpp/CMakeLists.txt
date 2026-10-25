@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.5.0)
+project(kujiequ_capture_probe)
+add_library(capture_probe SHARED napi_init.cpp probe.cpp)
+target_compile_features(capture_probe PRIVATE cxx_std_17)
+target_compile_options(capture_probe PRIVATE -Wall -Wextra)
+target_link_libraries(capture_probe PUBLIC libace_napi.z.so)

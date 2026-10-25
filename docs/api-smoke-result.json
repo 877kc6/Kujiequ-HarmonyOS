@@ -1,0 +1,28 @@
+{
+  "testedAt": "2026-10-24T14:28:39.330949+00:00",
+  "transport": "Python HTTPS, not HarmonyOS Network Kit",
+  "results": [
+    {
+      "endpoint": "/forum/list",
+      "gameId": 3,
+      "code": 200,
+      "count": 15
+    },
+    {
+      "endpoint": "/forum/getPostDetail",
+      "code": 200,
+      "contentBlocks": 5
+    },
+    {
+      "endpoint": "/forum/list",
+      "gameId": 2,
+      "code": 200,
+      "count": 15
+    },
+    {
+      "endpoint": "/gamer/role/list",
+      "guestCode": 220,
+      "authenticatedTest": false
+    }
+  ]
+}

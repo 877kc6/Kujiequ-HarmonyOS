@@ -1,0 +1,21 @@
+{
+  "testedAt": "2026-10-24T22:42:58.545691+00:00",
+  "transport": "Python HTTPS; not HarmonyOS Network Kit",
+  "readOnly": true,
+  "results": [
+    {
+      "endpoint": "/forum/comment/getPostCommentListV2",
+      "code": 200,
+      "items": 20,
+      "hasNext": 1,
+      "authenticated": false
+    },
+    {
+      "endpoint": "/forum/comment/getReplyList",
+      "code": 200,
+      "items": 1,
+      "hasNext": 1,
+      "authenticated": false
+    }
+  ]
+}

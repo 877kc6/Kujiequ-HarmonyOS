@@ -1,0 +1,13 @@
+{
+  "src": [
+    "pages/Index",
+    "pages/Post",
+    "pages/Login",
+    "pages/WebPage",
+    "pages/Settings",
+    "pages/History",
+    "pages/AccountList",
+    "pages/Compose",
+    "pages/CaptureProbe"
+  ]
+}
