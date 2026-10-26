@@ -12,15 +12,16 @@ export interface FeedData { postList: PostItem[]; hasNext: number; topList?: Pos
 export interface ContentLink { title: string; url: string; }
 export interface ContentBlock { contentType: number; content?: string; url?: string; imgWidth?: number; imgHeight?: number; contentLink?: ContentLink; }
 export interface PostDetail {
+  videoId?: string; canPlay?: boolean; reason?: string; videoWidth?: number; videoHeight?: number; coverImages?: Picture[];
   id: string; postTitle: string; userName: string; postUserId: string; headCodeUrl: string;
   postTime: string; postContent: ContentBlock[]; likeCount: number; commentCount: number;
   gameForumId: number; gameId: number; postType: number;
 }
-export interface CommentItem { commentId: string; userName: string; commentTime: string; commentContent: ContentBlock[]; replyCount?: number; userId: string; replyVos?: ReplyItem[]; }
+export interface CommentItem { commentId: string; userName: string; commentTime: string; commentContent: ContentBlock[]; replyCount?: number; userId: string; replyVos?: ReplyItem[]; userHeadUrl?: string; isMine?: number; }
 export interface DetailData { gameId: number; isLike: number; postDetail: PostDetail; comment?: CommentItem[]; }
 export interface LoginData { token: string; userId: string; userName: string; headUrl: string; }
 export interface SmsData { geeTest?: boolean; }
-export interface Profile { userId: string; userName: string; headUrl: string; signature?: string; postCount?: number; fansCount?: number; followCount?: number; }
+export interface Profile { userId: string; userName: string; headUrl: string; signature?: string; postCount?: number; fansCount?: number; followCount?: number; isFollow?: number; isLoginUser?: number; }
 export interface MineData { mine: Profile; }
 export interface Role { userId: string | number; gameId: number; serverId: string; serverName: string; roleId: string; roleName: string; gameLevel: string; }
 export interface Gauge { name: string; cur?: number; total?: number; refreshTimeStamp?: number; }
@@ -35,12 +36,12 @@ export interface PostParams { postId: string; }
 
 export interface CaptchaProof { lot_number: string; captcha_output: string; pass_token: string; gen_time: string; captcha_id?: string; }
 
-export interface ReplyItem { replyId: string; postCommentId: string; userId: string; userName: string; toUserName?: string; replyTime: string; replyContent: ContentBlock[]; }
+export interface ReplyItem { replyId: string; postCommentId: string; userId: string; userName: string; toUserName?: string; replyTime: string; replyContent: ContentBlock[]; userHeadUrl?: string; isMine?: number | string; }
 export interface CommentListData { postCommentList: CommentItem[]; hasNext?: number; }
 export interface ReplyListData { replys: ReplyItem[]; hasNext?: number; }
 export interface CommentResult { commentId?: string; replyId?: string; postCommentId?: string; comment?: CommentItem; reply?: ReplyItem; }
 export interface EditorText { type: number; content: string; target: string; }
-export interface EditorParagraph { contentType: number; content: string; children: EditorText[]; }
+export interface EditorParagraph { contentType: number; content: string; children: EditorText[]; url?: string; }
 export interface WebAccount { token: string; userId: string; }
 
 // Official homepage carousel response, not user feed posts.
@@ -64,7 +65,7 @@ export interface AccountPageData {
 }
 export interface AccountRow {
   key: string; postId: string; title: string; text: string; name: string; avatar: string;
-  cover: string; time: string; unread: boolean;
+  cover: string; time: string; unread: boolean; ownerId?: string;
 }
 export type AccountListPayload = AccountPageData | PostItem[] | AccountNotice[] | FanInfo[] | FollowInfo[] | null;
 export interface AccountListParams { kind: string; }
@@ -72,4 +73,6 @@ export interface AccountListResult { rows: AccountRow[]; hasNext: boolean; }
 
 export interface PublishResult { postId?: string; }
 export interface ComposeParams { gameId: number; }
-export interface ComposeDraft { title: string; body: string; boardId: number; }
+export interface ComposeDraft { title: string; body: string; boardId: number; media?: UploadedMedia[]; }
+
+export interface UploadedMedia { localId?: string; localUri?: string; localPath?: string; previewUri?: string; uploadState?: string; kind: string; url: string; width: number; height: number; videoId: string; name: string; }

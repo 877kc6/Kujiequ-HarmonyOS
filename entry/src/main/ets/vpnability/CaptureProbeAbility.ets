@@ -1,7 +1,7 @@
 import { Want } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { VpnExtensionAbility, vpnExtension } from '@kit.NetworkKit';
-import { run, cancel } from 'libcapture_probe.so';
+import { run, runTcp, runInternet, runHttps, confirmHttps, prepareInternet, closeInternet, cancel } from 'libcapture_probe.so';
 import { CaptureProbeStore } from '../services/CaptureProbeStore';
 import { ProbeStatus, validProbeRequest } from '../services/CaptureProbeModel';
 
@@ -39,6 +39,8 @@ export default class CaptureProbeAbility extends VpnExtensionAbility {
     let created = false;
     try {
       if (!this.allowed()) { this.status.phase = 'cancelled'; return; }
+      const mode = this.store?.request()?.mode;
+      this.status.mode = mode === 'https' ? 'https' : mode === 'internet' ? 'internet' : (mode === 'tcp' ? 'tcp' : 'udp');
       this.publish();
       this.connection = vpnExtension.createVpnConnection(this.context);
       const bundleName = this.context.applicationInfo.name;
@@ -53,12 +55,21 @@ export default class CaptureProbeAbility extends VpnExtensionAbility {
       const fd = await this.connection.create(config);
       created = true;
       if (!this.allowed()) { this.status.phase = 'cancelled'; return; }
+      if ((this.status.mode === 'internet' || this.status.mode === 'https')) {
+        const upstreamFd = prepareInternet();
+        await this.connection.protect(upstreamFd);
+        if (!this.allowed()) { this.status.phase = 'cancelled'; return; }
+      }
       this.status.phase = 'reading'; this.publish();
-      this.monitor = setInterval(() => { if (!this.allowed()) { this.stopped = true; cancel(); } }, 100);
-      const result = await run(fd, 'kujiequ_probe:' + this.runId);
+      this.monitor = setInterval(() => {
+        if (!this.allowed()) { this.stopped = true; cancel(); }
+        else if (this.status.mode === 'https' && this.store?.request()?.httpsPassed === true) { confirmHttps(); }
+      }, 100);
+      const result = this.status.mode === 'https' ? await runHttps(fd, 'kujiequ_https:' + this.runId) : this.status.mode === 'internet' ? await runInternet(fd, 'kujiequ_internet:' + this.runId) : this.status.mode === 'tcp' ?
+        await runTcp(fd, 'kujiequ_tcp:' + this.runId) : await run(fd, 'kujiequ_probe:' + this.runId);
       this.status.code = result.code; this.status.packets = result.packets; this.status.bytes = result.bytes;
       this.status.phase = !this.allowed() || result.code === 2 ? 'cancelled' :
-        (result.code === 0 ? 'passed' : (result.code === 1 ? 'no_packet' : 'failed'));
+        (result.code === 0 ? 'passed' : (result.code === 1 ? (result.packets > 0 ? 'incomplete' : 'no_packet') : 'failed'));
     } catch (error) {
       this.status.phase = this.stopped ? 'cancelled' : 'failed';
       const code = (error as BusinessError).code;
@@ -66,6 +77,7 @@ export default class CaptureProbeAbility extends VpnExtensionAbility {
     } finally {
       if (this.monitor >= 0) { clearInterval(this.monitor); this.monitor = -1; }
       cancel();
+      closeInternet();
       // Destroy even when create rejected: the system may have partially set up.
       try {
         if (this.connection) { await this.connection.destroy(); }

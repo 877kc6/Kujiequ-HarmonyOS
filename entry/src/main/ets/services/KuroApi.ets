@@ -1,27 +1,32 @@
+import { mediaContent, mediaHtml } from './MediaProtocol';
 import { publishBoard, postContent, escapedHtml } from './GameBoards';
 import { accountPath, accountPairs, accountRows } from './AccountData';
 import { http } from '@kit.NetworkKit';
-import { Envelope, Pair, FeedData, DetailData, SmsData, LoginData, MineData, Role, WidgetData, SignInfo, SignResult, LikeData, PostDetail, Profile, CommentListData, ReplyListData, CommentResult, EditorText, EditorParagraph, PublishResult, OfficialBanner, AccountListPayload, AccountListResult } from '../models/Models';
+import { Envelope, Pair, FeedData, DetailData, SmsData, LoginData, MineData, Role, WidgetData, SignInfo, SignResult, LikeData, PostDetail, Profile, CommentListData, ReplyListData, CommentResult, EditorText, EditorParagraph, PublishResult, UploadedMedia, Picture, OfficialBanner, AccountListPayload, AccountListResult, AccountRow } from '../models/Models';
 import { ApiError, formEncode, checked, chinaMonth } from './Protocol';
 import { Session } from './Session';
 import { LocalStore } from './LocalStore';
 
 export class KuroApi {
   private static readonly base: string = 'https://api.kurobbs.com';
-  static async post<T>(path: string, pairs: Pair[], auth: boolean = false, credential: string = '', source: string = 'android'): Promise<T> {
-    if (auth && !Session.token) { throw new ApiError(220, '请先登录库街区账号'); }
-    const generation = Session.generation;
-    const request = http.createHttp();
-    try {
-      // source is a server protocol field, not an Android runtime dependency.
-      const headers: Record<string, string> = {
+  static headers(source: string = 'android', credential: string = ''): Record<string, string> {
+    const headers: Record<string, string> = {
         'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
         'Accept': 'application/json', 'source': source, 'version': '2.2.0',
         'versionCode': '2200', 'devCode': LocalStore.deviceId, 'distinct_id': LocalStore.deviceId,
         'lang': 'zh-Hans', 'countryCode': 'CN', 'User-Agent': 'KujiequHarmony/1.0',
         'Origin': 'https://web-static.kurobbs.com'
       };
-      if (credential || Session.token) { headers['token'] = credential || Session.token; }
+    if (credential || Session.token) { headers['token'] = credential || Session.token; }
+    return headers;
+  }
+  static async post<T>(path: string, pairs: Pair[], auth: boolean = false, credential: string = '', source: string = 'android'): Promise<T> {
+    if (auth && !Session.token) { throw new ApiError(220, '请先登录库街区账号'); }
+    const generation = Session.generation;
+    const request = http.createHttp();
+    try {
+      // source is a server protocol field, not an Android runtime dependency.
+      const headers = KuroApi.headers(source, credential);
       const response = await request.request(KuroApi.base + path, {
         method: http.RequestMethod.POST, header: headers, extraData: formEncode(pairs),
         expectDataType: http.HttpDataType.STRING, connectTimeout: 15000, readTimeout: 20000,
@@ -35,8 +40,10 @@ export class KuroApi {
       return checked<T>(body);
     } finally { request.destroy(); }
   }
-  static async accountList(kind: string, page: number): Promise<AccountListResult> {
-    const userId = Session.userId; const generation = Session.generation;
+  static async accountList(kind: string, page: number, requestedUserId: string = ''): Promise<AccountListResult> {
+    const loginUserId = Session.userId; const userId = requestedUserId || loginUserId; const generation = Session.generation;
+    if (requestedUserId && kind !== 'posts' && kind !== 'fans' && kind !== 'follows') { throw new Error('不支持读取该用户列表'); }
+    if (requestedUserId && !/^\d{1,24}$/.test(requestedUserId)) { throw new Error('无效用户编号'); }
     const path = accountPath(kind); const pairs = accountPairs(kind, page, userId);
     let data: AccountListPayload;
     try {
@@ -55,7 +62,7 @@ export class KuroApi {
         let profileValid: boolean = false;
         try {
           const mine = await KuroApi.profile();
-          profileValid = String(mine?.mine?.userId || '') === userId;
+          profileValid = String(mine?.mine?.userId || '') === loginUserId;
         } catch (profileError) {
           const profileFailure = profileError as ApiError;
           if (profileFailure.code !== 220) { throw profileFailure; }
@@ -68,18 +75,35 @@ export class KuroApi {
     return accountRows(kind, data);
   }
 
-  static publish(gameId: number, boardId: number, title: string, body: string): Promise<PublishResult> {
+  static publish(gameId: number, boardId: number, title: string, body: string, attachments: UploadedMedia[] = []): Promise<PublishResult> {
     if (!publishBoard(gameId, boardId)) { throw new Error('请选择本游戏的发布分区'); }
     if (!title.trim() || title.trim().length > 40 || !body.trim() || body.length > 10000) { throw new Error('标题需1–40字，正文需1–10000字'); }
+    if (attachments.some((m: UploadedMedia): boolean => !!m.uploadState && m.uploadState !== 'uploaded')) { throw new Error('请先完成附件上传，或移除上传失败的附件'); }
+    const videos = attachments.filter((m: UploadedMedia): boolean => m.kind === 'video');
+    const images = attachments.filter((m: UploadedMedia): boolean => m.kind === 'image');
+    if (attachments.length > 10 || videos.length > 1 || images.length > 9 || attachments.some((m: UploadedMedia): boolean =>
+      (m.kind !== 'video' && m.kind !== 'image') || (m.kind === 'image' && !/^https:\/\//i.test(m.url)) || (m.kind === 'video' && !/^[a-zA-Z0-9_-]{8,128}$/.test(m.videoId)))) { throw new Error('附件格式或数量无效'); }
+    if (videos.length && images.length === 0) { throw new Error('视频帖子需要选择一张图片作为封面'); }
+    const video = videos.length ? videos[0] : undefined;
+    const cover = images.length ? images[0] : undefined;
+    const covers: Picture[] = cover ? [{ url: cover.url, imgWidth: cover.width, imgHeight: cover.height }] : [];
     return KuroApi.post<PublishResult>('/forum/postPublish', [
       { key: 'gameId', value: String(gameId) }, { key: 'gameForumId', value: String(boardId) },
-      { key: 'postTitle', value: title.trim() }, { key: 'content', value: postContent(body.trim()) },
-      { key: 'h5Content', value: escapedHtml(body.trim()) }, { key: 'newH5Content', value: escapedHtml(body.trim()) },
-      { key: 'postType', value: '1' }, { key: 'isCopyright', value: '0' }, { key: 'isAiContent', value: 'false' },
+      { key: 'postTitle', value: title.trim() }, { key: 'content', value: attachments.length ? mediaContent(body.trim(), attachments) : postContent(body.trim()) },
+      { key: 'h5Content', value: attachments.length ? mediaHtml(body.trim(), attachments) : escapedHtml(body.trim()) }, { key: 'newH5Content', value: attachments.length ? mediaHtml(body.trim(), attachments) : escapedHtml(body.trim()) },
+      { key: 'postType', value: video ? '2' : '1' }, { key: 'isCopyright', value: '0' }, { key: 'isAiContent', value: 'false' },
       { key: 'publishType', value: '0' }, { key: 'publishTime', value: '' }, { key: 'showRange', value: '0' },
       { key: 'draftId', value: '' }, { key: 'topicIdStr', value: '' }, { key: 'chatUserIds', value: '' },
-      { key: 'coverImageInfo', value: '[]' }
+      { key: 'coverImageInfo', value: JSON.stringify(covers) },
+      { key: 'videoId', value: video?.videoId || '' }, { key: 'videoName', value: video?.name || '' }
     ], true);
+  }
+  static async deletePost(id: string): Promise<void> {
+    if (!Session.token || !Session.userId) { throw new ApiError(220, '请先登录'); }
+    const owner = Session.userId; const generation = Session.generation;
+    const detail = await KuroApi.detail(id);
+    if (generation !== Session.generation || String(detail.postDetail.postUserId) !== owner) { throw new Error('只能删除当前账号自己的帖子'); }
+    await KuroApi.post<LikeData>('/forum/more/delete', [{ key: 'deleteType', value: '1' }, { key: 'id', value: id }], true);
   }
   static banners(gameId: number): Promise<OfficialBanner[]> {
     return KuroApi.post<OfficialBanner[]>('/forum/getBannerList', [
@@ -135,14 +159,15 @@ export class KuroApi {
       { key: 'pageIndex', value: String(page) }, { key: 'pageSize', value: '20' }
     ]);
   }
-  static comment(post: PostDetail, text: string, commentId: string = '', toUserId: string = '', replyId: string = ''): Promise<CommentResult> {
+  static comment(post: PostDetail, text: string, commentId: string = '', toUserId: string = '', replyId: string = '', imageUrl: string = ''): Promise<CommentResult> {
     const trimmed = text.trim();
-    if (!trimmed || trimmed.length > 1000) { throw new Error('请输入 1–1000 字评论'); }
+    if ((!trimmed && !imageUrl) || trimmed.length > 1000) { throw new Error('请输入 1–1000 字评论'); }
     const textNode: EditorText = { type: 1, content: trimmed, target: '' };
-    const content: EditorParagraph[] = [{ contentType: 1, content: trimmed, children: [textNode] }];
+    const content: EditorParagraph[] = trimmed ? [{ contentType: 1, content: trimmed, children: [textNode] }] : [];
+    if (imageUrl) { content.push({ contentType: 2, content: '', children: [], url: imageUrl }); }
     const params: Pair[] = [
       { key: 'postId', value: post.id }, { key: 'forumId', value: String(post.gameForumId) },
-      { key: 'gameId', value: String(post.gameId) }, { key: 'postType', value: '1' },
+      { key: 'gameId', value: String(post.gameId) }, { key: 'postType', value: String(post.postType || 1) },
       { key: 'content', value: JSON.stringify(content) }, { key: 'toUserId', value: toUserId || String(post.postUserId) },
       { key: 'chatUserIds', value: '' }
     ];
@@ -152,6 +177,29 @@ export class KuroApi {
   }
   static profile(): Promise<MineData> {
     return KuroApi.post<MineData>('/user/mineV2', [{ key: 'otherUserId', value: Session.userId }], true);
+  }
+  static userProfile(userId: string): Promise<MineData> {
+    if (!/^\d{1,24}$/.test(userId)) { return Promise.reject(new Error('Invalid user ID')); }
+    return KuroApi.post<MineData>('/user/mineV2', [{ key: 'otherUserId', value: userId }], true);
+  }
+  // Resolve relations from the signed-in account's follow list. The mineV2 other-user
+  // response is unreliable on current servers and must not determine this state.
+  static async isFollowing(userId: string): Promise<boolean> {
+    if (!/^\d{1,24}$/.test(userId)) { throw new Error('Invalid follow target'); }
+    const sessionId: string = Session.userId;
+    for (let page: number = 1; page <= 15; page++) {
+      const result = await KuroApi.accountList('follows', page, sessionId);
+      if (sessionId !== Session.userId) { throw new Error('Account changed'); }
+      if (result.rows.some((item: AccountRow): boolean => item.ownerId === userId)) { return true; }
+      if (!result.hasNext) { return false; }
+    }
+    throw new Error('Follow list is too long to verify; please refresh later');
+  }
+  static followUser(userId: string, follow: boolean): Promise<LikeData> {
+    if (!/^\d{1,24}$/.test(userId) || userId === Session.userId) { return Promise.reject(new Error('Invalid follow target')); }
+    return KuroApi.post<LikeData>('/user/followUser', [
+      { key: 'followUserId', value: userId }, { key: 'operateType', value: follow ? '1' : '2' }
+    ], true);
   }
   static roles(gameId: number): Promise<Role[]> { return KuroApi.post<Role[]>('/gamer/role/list', [{ key: 'gameId', value: String(gameId) }], true); }
   private static roleParams(role: Role): Pair[] {

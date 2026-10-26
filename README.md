@@ -1,75 +1,84 @@
-# 库街区 HarmonyOS
+1.8.13: Fix follow relation persistence across navigation by checking the authenticated /user/follow list on profile entry; refresh own-account follow/fan lists whenever shown; open native UserProfile from follow/fan rows; after successful follow/unfollow publish followChangedAt. A server-verified mineV2 other-user profile is still required to display other-user counts. Follow state check is limited to 15 pages; an unknown result is not treated as proof of not following. Native DevEco build and server tests are still required.
 
-**一个为 HarmonyOS 打造的非官方库洛游戏社区客户端。**
+1.8.12: Fix follow button being disabled by mismatched profile response. Follow action uses post author ID; success is confirmed by API. Hide unverified counts, remove dynamic count label, rename user feed heading to Posts. Full stranger-profile and counts still depend on verified API.
 
-库街区 HarmonyOS 是由 Kevin 独立开发的 HarmonyOS 原生应用项目，旨在为《鸣潮》和《战双帕弥什》玩家提供更加贴合鸿蒙系统的社区使用体验。
+1.8.11 author-page fallback (API 26)
+- Keeps the clicked author's public ID/name/avatar when mineV2 returns a different account.
+- Loads and filters author timeline by returned post owner ID.
+- Follow actions remain disabled unless verified user profile data is returned.
+- The backend currently returns mismatched profile identity for tested otherUserId; complete statistics cannot be validated.
+- DevEco Studio build and device tests are still required.
 
-项目基于 ArkTS、ArkUI 和 Stage 模型开发，探索 HarmonyOS 原生交互设计与系统能力的结合。
+1.8.10: User profile request/result ID validation, per-post author verification, and follow safety guards. A mismatched API response is shown as an error rather than another account.
 
-> 本项目由个人出于兴趣开发，与库洛游戏及其官方产品不存在隶属、授权或合作关系。
+Kujiequ 1.8.9: Native user timeline and profile navigation
+=======================================================
+- Author avatar and name open the corresponding native user profile.
+- User profile reads real account data, follow state, and user-specific posts with pagination.
+- Post cards open the selected post; follow button calls the existing API.
+- Own and other user profiles use distinct actions; no delete controls for other authors.
+- Profile editing is not yet available: unverified write APIs are not used.
+- Update.cmd: success closes, errors remain visible in Update.log.
+- Build/run and backend API behavior have not been verified on device.
 
-## 项目特色
+# 库街区 Kujiequ
 
-- **原生鸿蒙体验**：采用 ArkTS 与 ArkUI 构建，不依赖 Android 兼容层。
-- **游戏社区**：支持《鸣潮》与《战双帕弥什》社区内容浏览及切换。
-- **帖子互动**：提供帖子详情、评论浏览、本地收藏等功能。
-- **账号功能**：包含登录、账号资料、绑定角色和游戏数据相关功能，部分功能仍在联调。
-- **沉浸式界面**：支持深色模式、自定义背景与系统沉浸光感相关设置。
-- **持续开发**：逐步完善原生功能，减少对网页界面的依赖。
+HarmonyOS 原生 ArkTS/ArkUI 社区客户端，目标 HarmonyOS API 26。
 
-## 开发进度
+## v1.8.7 原生用户资料与关注
 
-当前开发版本：**1.6.1-probe**
+- 点击帖子作者头像打开原生个人主页。
+- 关注/取关通过项目接入的用户接口请求。
+- 修复版本号回退：`versionCode` 从错误的 10807 改为 1008007，以便从 1.8.6 覆盖安装并保留应用数据。
+- 编辑个人资料的写入接口尚未验证完成。
 
-本项目仍处于开发和测试阶段，部分功能尚未完成或经过真机验证。
+## v1.8.6 界面更新
 
-目前主要开发方向包括：
+- 帖子图片全屏预览：关闭按钮下移并避让系统状态栏，取消底部冗余说明。
+- 视频播放器：沉浸式浮层播放/暂停与画面展开按钮，沿用项目现有 HDS 材质。
+- 保留账号、帖子、评论、发帖草稿和现有网络功能。
+- **未实现真正的游戏流量抓取、HTTPS 解密或抽卡授权提取。**
 
-- 完善社区原生发布与互动功能。
-- 改进 HarmonyOS 原生页面交互及沉浸式设计。
-- 优化账号登录、数据终端及角色信息。
-- 研究用户主动授权的本地网络诊断能力。
-- 提升应用稳定性与兼容性。
+视觉设计参考 [HarmonyX](https://github.com/haohaoai0/HarmonyX) 所公开的 HDS 导航与沉浸样式；本次采用独立实现，不直接复制其源码。
 
-其中，本地网络抓包仍属于实验功能，目前不支持完整的游戏抽卡记录导入。
+## 安装 / 更新
 
-## 开发环境
+解压完整压缩包，进入 `Kujiequ`，双击 `Update.cmd`，选择旧工程根目录。脚本备份后覆盖源码，成功后自动退出。
 
-| 项目 | 技术 |
-|---|---|
-| 开发工具 | DevEco Studio |
-| 开发语言 | ArkTS / TypeScript / C++ |
-| UI 框架 | ArkUI |
-| 应用模型 | Stage |
-| 目标平台 | HarmonyOS |
-| 当前 SDK | API 26 |
+## 测试状态
 
-## 构建与运行
+源码静态检查和压缩包完整性检查不等于编译通过。请在 DevEco Studio API 26 环境编译，并在真机检验图片预览与视频播放。
 
-1. 克隆本仓库。
-2. 使用支持 API 26 的 DevEco Studio 打开项目根目录。
-3. 安装项目所需的 HarmonyOS SDK 和依赖。
-4. 配置自己的应用签名。
-5. 编译并在兼容的 HarmonyOS 设备上运行。
 
-部分实验功能依赖 Native 工具链及设备系统能力，实际支持情况以设备测试结果为准。
+### Windows one-click updater troubleshooting
 
-## 开源声明
+Run `Update.cmd` from the extracted `Kujiequ` folder and select the **existing** project root. On success, the window closes automatically. On failure, the window stays open and writes `Update.log` beside `Update.cmd`. Attach that log when reporting a failed update. The updater does not replace `.git` or local build caches.
 
-本项目是个人学习、研究与非商业兴趣开发项目。
 
-《鸣潮》《战双帕弥什》及相关品牌、角色、美术素材的权利归其各自权利人所有。本项目不代表官方立场。
+# Kujiequ 1.8.7 - Native profile and follow
 
-本仓库独立代码采用 MIT License 开源，具体以仓库中的 LICENSE 文件为准。第三方内容不因本项目的开源许可而获得额外授权。
+- Tapping an author avatar opens an ArkUI-native profile page (no WebView).
+- The profile is loaded with `/user/mineV2` and displays name, avatar, biography and counters.
+- Follow/unfollow uses `/user/followUser` with operateType 1 or 2. Server state is refreshed after mutation.
+- The plus button was removed from the home top-right header. The existing bottom Publish tab remains.
+- The My-page profile header opens the native user profile.
+- Profile editing has **not** been enabled: a verified write endpoint for nickname/biography is still required. No fake local-only save.
+- UI work is an incremental implementation, not a complete HarmonyX clone. Reuse of third-party sources needs licensing review.
+- API response compatibility and HarmonyOS compilation still require device-side verification.
 
-## 反馈与交流
 
-如果你在使用或构建过程中遇到问题，欢迎通过 GitHub Issues 提交反馈。
+### 登录保持说明（1.8.9）
 
-也欢迎开发者参与讨论、提交 Pull Request，共同完善 HarmonyOS 原生应用体验。
+本机已使用 HarmonyOS AssetStore 保存登录凭证并在启动时恢复。1.8.9 阻止网页凭证静默替换已登录的原生账号。若服务器使 Token 失效，客户端不能保证永久登录，且尚未实现官方验证过的刷新机制；届时需重新认证。不要卸载应用或清除数据以免丢失本地草稿。
 
----
 
-**Developer: Kevin**
+### 1.8.9 compile hotfix (2026-10-26)
+- Fix `UserProfile.ets` ArkTS 10505001 at line 143: do not chain `width`, `height`, or `backgroundColor` on the custom `SafePage` component; apply full-size style to the outer `Stack` instead.
+- Preserve user-profile timeline from 1.8.8 and session guard from 1.8.9. No versionCode bump (remains 1008009). Requires DevEco Studio compilation to confirm.
 
-*Made for HarmonyOS. Built with passion.*
+
+## 1.8.14 评论体验更新
+
+- 评论及回复新增作者头像和原生个人主页跳转。
+- 评论增加选图、上传以及图文提交尝试，图片评论请求体需要真机服务端验证。
+- 删除评论接口尚未得到可靠验证，本版不提供会误删或假删除的操作。

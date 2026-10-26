@@ -51,7 +51,7 @@ struct Index {
     this.getUIContext().getPromptAction().showToast({ message: '再返回一次退出库街区' });
     return true;
   }
-  onPageShow(): void { this.composeOpening = false; this.refresh(); this.autoSignOnLaunch(); }
+  onPageShow(): void { this.composeOpening = false; this.profileAt = 0; this.refresh(); this.autoSignOnLaunch(); }
   private openCompose(): void {
     if (this.composeOpening) { return; }
     this.composeOpening = true;
@@ -209,7 +209,7 @@ struct Index {
               Text(this.loggedIn ? `ID ${this.profile.userId}` : '登录查看更多精彩内容').fontSize(12).fontColor(UiTheme.secondary(this.darkTheme))
               if (this.profile.signature && this.loggedIn) { Text(this.profile.signature).fontSize(12).fontColor(UiTheme.muted(this.darkTheme)).maxLines(2) }
             }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          }.width('100%').padding({ top: 12, bottom: 18 }).onClick(() => { if (!this.loggedIn) { this.getUIContext().getRouter().pushUrl({ url: 'pages/Login' }); } })
+          }.width('100%').padding({ top: 12, bottom: 18 }).onClick(() => { this.getUIContext().getRouter().pushUrl({url:this.loggedIn ? 'pages/UserProfile' : 'pages/Login',params:{userId:Session.userId}}); })
           Row({ space: 12 }) {
             Button(this.loggedIn ? `${this.profile.followCount === undefined ? '—' : this.profile.followCount}  关注` : '关注').height(48).layoutWeight(1).fontSize(15)
               .fontColor(UiTheme.primary(this.darkTheme)).backgroundColor(UiTheme.surface(this.darkTheme)).onClick(() => this.openAccountList('follows'))
@@ -240,7 +240,7 @@ struct Index {
             .onClick(() => this.getUIContext().getRouter().pushUrl({ url: 'pages/WebPage', params: { url: 'https://www.kurobbs.com/mc/home', title: '官方社区' } }))
           if (this.message) { Text(this.message).fontSize(12).fontColor(UiTheme.errorText(this.darkTheme)).width('100%') }
           if (this.loggedIn) { Button('退出账号').constraintSize({ minHeight: 44 }).width('100%').fontColor(UiTheme.warningText(this.darkTheme)).backgroundColor(UiTheme.warningSurface(this.darkTheme)).onClick(() => this.logout()) }
-          Text('库街区 · 非官方 1.6.1-probe\n独立开发 · HarmonyOS API 26').fontSize(11).fontColor(UiTheme.muted(this.darkTheme)).lineHeight(19).textAlign(TextAlign.Center)
+          Text('库街区 · 非官方 1.8.7\n独立开发 · HarmonyOS API 26').fontSize(11).fontColor(UiTheme.muted(this.darkTheme)).lineHeight(19).textAlign(TextAlign.Center)
         }.padding({ left: 20, right: 20, top: 12, bottom: 110 }).width('100%')
       }.onScroll((xOffset: number, yOffset: number) => this.scrollNavigation(yOffset)).width('100%').height('100%').backgroundColor(UiTheme.page(this.darkTheme))
     }.width('100%').height('100%')

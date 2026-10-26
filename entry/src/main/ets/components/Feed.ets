@@ -90,24 +90,24 @@ export struct Feed {
   card(post: PostItem) {
     Column({ space: 12 }) {
       Row({ space: 9 }) {
-        if (post.userHeadUrl) { Image(post.userHeadUrl).width(32).height(32).borderRadius(16).objectFit(ImageFit.Cover) }
+        if (post.userHeadUrl) { Image(post.userHeadUrl).width(36).height(36).borderRadius(18).objectFit(ImageFit.Cover).onClick(() => { if (post.userId && /^\d{1,24}$/.test(String(post.userId))) { this.getUIContext().getRouter().pushUrl({url:'pages/UserProfile',params:{userId:String(post.userId),userName:post.userName || '',avatar:post.userHeadUrl || ''}}); } }) }
         Column({ space: 3 }) {
-          Text(post.userName ?? '库街区用户').fontSize(13).fontWeight(FontWeight.Medium).fontColor(UiTheme.body(this.darkTheme))
+          Text(post.userName ?? '库街区用户').fontSize(13).fontWeight(FontWeight.Medium).fontColor(UiTheme.body(this.darkTheme)).onClick(() => { if (post.userId && /^\d{1,24}$/.test(String(post.userId))) { this.getUIContext().getRouter().pushUrl({url:'pages/UserProfile',params:{userId:String(post.userId),userName:post.userName || '',avatar:post.userHeadUrl || ''}}); } })
           Text(post.showTime ?? '').fontSize(11).fontColor(UiTheme.muted(this.darkTheme))
         }.alignItems(HorizontalAlign.Start)
         Blank()
         if (post.postType === 2) { Text('视频').fontSize(11).fontColor('#9F7B1E') }
       }.width('100%')
-      Text(post.postTitle || '社区动态').fontSize(18).fontWeight(FontWeight.Bold).fontColor(UiTheme.primary(this.darkTheme)).width('100%').maxLines(2)
-      if (post.postContent) { Text(post.postContent).fontSize(14).fontColor(UiTheme.secondary(this.darkTheme)).width('100%').maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis }) }
-      if (this.cover(post)) { Image(this.cover(post)).width('100%').height(185).borderRadius(14).objectFit(ImageFit.Cover) }
+      Text(post.postTitle || '社区动态').fontSize(18).fontWeight(FontWeight.Bold).fontColor(UiTheme.primary(this.darkTheme)).width('100%').maxLines(2).onClick(() => this.getUIContext().getRouter().pushUrl({ url: 'pages/Post', params: { postId: post.postId } }))
+      if (post.postContent) { Text(post.postContent).fontSize(14).fontColor(UiTheme.secondary(this.darkTheme)).width('100%').maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis }).onClick(() => this.getUIContext().getRouter().pushUrl({ url: 'pages/Post', params: { postId: post.postId } })) }
+      if (this.cover(post)) { Image(this.cover(post)).width('100%').height(185).borderRadius(14).objectFit(ImageFit.Cover).onClick(() => this.getUIContext().getRouter().pushUrl({ url: 'pages/Post', params: { postId: post.postId } })) }
       Row() {
         Text(`${post.likeCount ?? 0} 赞`).fontSize(12).fontColor(UiTheme.muted(this.darkTheme))
         Blank()
         Text(`${post.commentCount ?? 0} 条评论`).fontSize(12).fontColor(UiTheme.muted(this.darkTheme))
       }.width('100%')
     }.alignItems(HorizontalAlign.Start).padding(18).width('100%').backgroundColor(UiTheme.surface(this.darkTheme)).borderRadius(20)
-      .onClick(() => { this.getUIContext().getRouter().pushUrl({ url: 'pages/Post', params: { postId: post.postId } }); })
+      
   }
   build() {
     Stack() {
@@ -116,9 +116,6 @@ export struct Feed {
         Text('库街区').fontSize(25).fontWeight(FontWeight.Bold).fontColor(UiTheme.primary(this.darkTheme))
         Text('非官方').fontSize(10).fontColor(UiTheme.muted(this.darkTheme)).padding(5).backgroundColor(UiTheme.control(this.darkTheme)).borderRadius(5)
         Blank()
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.plus')).fontSize(22).fontColor([UiTheme.primary(this.darkTheme)])
-        }.width(44).height(44).backgroundColor(UiTheme.surface(this.darkTheme)).accessibilityText('发帖，打开官方编辑器').onClick(() => this.publish())
         Button(this.gameId === 3 ? '鸣潮 ▾' : '战双 ▾').constraintSize({ minHeight: 44 }).fontSize(13).fontColor(UiTheme.primary(this.darkTheme)).backgroundColor('#16D9C9')
           .onClick(() => this.selectGame(this.gameId === 3 ? 2 : 3)).systemMaterial(UiTheme.button(this.materialEnabled, this.materialThickness))
       }.width('100%').padding({ left: 20, right: 20, top: 12 })

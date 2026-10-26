@@ -1,3 +1,6 @@
+import { PostVideo } from '../components/PostVideo';
+import { photoAccessHelper } from '@kit.MediaLibraryKit';
+import { MediaApi } from '../services/MediaApi';
 import { SafePage } from '../components/SafePage';
 import { ApiError } from '../services/Protocol';
 import { UiTheme } from '../services/UiTheme';
@@ -16,17 +19,22 @@ struct Post {
   @StorageLink('darkTheme') darkTheme: boolean = false;
   @State detail?: DetailData = undefined;
   @State busy: boolean = false;
+  @State deleting: boolean = false;
   @State liking: boolean = false;
   @State saving: boolean = false;
   @State liked: boolean = false;
   @State saved: boolean = false;
   @State message: string = '';
+  @State previewImage: string = '';
   @State comments: CommentItem[] = [];
   @State commentPage: number = 1;
   @State moreComments: boolean = true;
   @State commentsBusy: boolean = false;
   @State draft: string = '';
   @State sending: boolean = false;
+  @State commentImage: string = '';
+  @State commentImageUri: string = '';
+  @State imageBusy: boolean = false;
   @State replyCommentId: string = '';
   @State replyUserId: string = '';
   @State replyId: string = '';
@@ -38,13 +46,14 @@ struct Post {
   @State repliesBusy: boolean = false;
   @State updatesAvailable: boolean = false;
   private polling: number = -1;
+  @State videoVisible: boolean = false;
   private visible: boolean = false;
   private requestVersion: number = 0;
   onPageShow(): void {
-    this.visible = true;
+    this.visible = true; this.videoVisible = true;
     if (this.polling === -1) { this.polling = setInterval(() => { this.checkUpdates(); }, 30000); }
   }
-  onPageHide(): void { this.visible = false; this.requestVersion++; if (this.polling !== -1) { clearInterval(this.polling); this.polling = -1; } }
+  onPageHide(): void { this.videoVisible = false; this.visible = false; this.requestVersion++; if (this.polling !== -1) { clearInterval(this.polling); this.polling = -1; } }
   aboutToDisappear(): void { this.onPageHide(); }
   private async checkUpdates(): Promise<void> {
     if (!this.visible || this.busy || this.commentsBusy || this.sending || this.liking) { return; }
@@ -81,19 +90,42 @@ struct Post {
     } catch (e) { this.message = '回复：' + (e as Error).message; }
     finally { this.repliesBusy = false; }
   }
+  private openCommentAuthor(userId: string, userName: string, avatar: string): void {
+    if (!/^\d{1,24}$/.test(String(userId))) { this.message = '评论作者的用户 ID 无效'; return; }
+    this.getUIContext().getRouter().pushUrl({ url: 'pages/UserProfile', params: { userId: String(userId), userName: userName, avatar: avatar } });
+  }
+  private async pickCommentImage(): Promise<void> {
+    if (this.sending || this.imageBusy || this.commentImage) { return; }
+    if (!Session.token) { this.getUIContext().getRouter().pushUrl({ url: 'pages/Login' }); return; }
+    this.imageBusy = true;
+    try {
+      const options = new photoAccessHelper.PhotoSelectOptions();
+      options.MIMEType = photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE;
+      options.maxSelectNumber = 1;
+      const selected = await new photoAccessHelper.PhotoViewPicker().select(options);
+      if (selected.photoUris.length < 1) { return; }
+      const uri = selected.photoUris[0];
+      const uploaded = await MediaApi.uploadImage(uri, (_progress: number) => {});
+      if (!uploaded.url || !/^https:\/\//i.test(uploaded.url)) { throw new Error('图片地址未返回，请重试'); }
+      this.commentImage = uploaded.url;
+      this.commentImageUri = uri;
+      this.message = '评论图片已上传，点击发送提交评论';
+    } catch (error) { this.message = '评论图片上传失败：' + (error as Error).message; }
+    finally { this.imageBusy = false; }
+  }
   private target(commentId: string, userId: string, name: string, replyId: string = ''): void {
     this.replyCommentId = commentId; this.replyUserId = userId; this.replyName = name; this.replyId = replyId;
   }
   private async send(): Promise<void> {
-    if (this.sending || !this.detail || !this.draft.trim()) { return; }
+    if (this.sending || this.imageBusy || !this.detail || (!this.draft.trim() && !this.commentImage)) { return; }
     if (!Session.token) { this.getUIContext().getRouter().pushUrl({ url: 'pages/Login' }); return; }
     this.sending = true; this.requestVersion++; this.message = '';
     try {
-      const result = await KuroApi.comment(this.detail.postDetail, this.draft, this.replyCommentId, this.replyUserId, this.replyId);
+      const result = await KuroApi.comment(this.detail.postDetail, this.draft, this.replyCommentId, this.replyUserId, this.replyId, this.commentImage);
       if (!result?.commentId && !result?.replyId && !result?.postCommentId && !result?.comment?.commentId && !result?.reply?.replyId) {
         throw new Error('提交结果未确认，请先刷新查看，避免重复发送');
       }
-      this.draft = ''; this.target('', '', ''); this.message = '已提交，显示时间以服务器审核为准';
+      this.draft = ''; this.commentImage = ''; this.commentImageUri = ''; this.target('', '', ''); this.message = '已提交，显示时间以服务器审核为准';
       await this.loadComments(true);
       const parent = this.comments.find((c: CommentItem): boolean => c.commentId === this.expandedCommentId);
       if (parent) { await this.loadReplies(parent, true); }
@@ -149,6 +181,7 @@ struct Post {
         Text(block.content).fontSize(16).fontColor(UiTheme.body(this.darkTheme)).lineHeight(27).width('100%').copyOption(CopyOptions.InApp)
       } else if ((block.contentType === 2 || block.contentType === 4) && block.url && /^https:\/\//i.test(block.url)) {
         Image(block.url).width('100%').aspectRatio(block.imgWidth && block.imgHeight ? block.imgWidth / block.imgHeight : 1).objectFit(ImageFit.Contain).borderRadius(10)
+          .onClick(() => { this.previewImage = block.url ?? ''; })
       } else if (block.contentType === 3 && block.contentLink) {
         Button(block.contentLink.title || '查看链接').constraintSize({ minHeight: 44 }).fontColor('#A67E17').backgroundColor(UiTheme.accentSurface(this.darkTheme))
           .onClick(() => {
@@ -159,11 +192,31 @@ struct Post {
       } else { Text('此内容请前往官方帖子查看').fontSize(12).fontColor(UiTheme.muted(this.darkTheme)) }
     })
   }
+  private confirmDelete(): void {
+    if (!this.detail || this.deleting || this.sending || String(this.detail.postDetail.postUserId) !== Session.userId) { return; }
+    this.getUIContext().showAlertDialog({ title: '删除帖子', message: '确认删除这篇帖子？服务器删除后无法通过本应用恢复。',
+      primaryButton: { value: '取消', action: () => {} },
+      secondaryButton: { value: '删除', fontColor: '#D84A3E', action: () => this.removePost() } });
+  }
+  private async removePost(): Promise<void> {
+    if (this.deleting || this.sending) { return; }
+    this.deleting = true;
+    try {
+      await KuroApi.deletePost(this.currentPostId);
+      AppStorage.setOrCreate('myPostsChangedAt', Date.now()); this.getUIContext().getRouter().back();
+    } catch (e) { this.message = (e as Error).message + '；请刷新确认服务器状态，避免重复操作'; }
+    finally { this.deleting = false; }
+  }
   @Builder
   pageHeader() {
     Row() {
         Button('‹ 返回').constraintSize({ minHeight: 44 }).fontColor(UiTheme.primary(this.darkTheme)).backgroundColor(UiTheme.control(this.darkTheme)).onClick(() => this.getUIContext().getRouter().back()).systemMaterial(UiTheme.button(this.materialEnabled, this.materialThickness))
         Blank()
+        if (this.detail && Session.token && String(this.detail.postDetail.postUserId) === Session.userId) {
+          Button(this.deleting ? '删除中' : '删除').height(40).borderRadius(20).fontColor('#D84A3E').backgroundColor(UiTheme.warningSurface(this.darkTheme))
+            .enabled(!this.deleting && !this.sending).onClick(() => this.confirmDelete())
+        }
+        Button('作者主页').constraintSize({ minHeight: 44 }).enabled(this.detail !== undefined).onClick(() => { if (this.detail) { this.getUIContext().getRouter().pushUrl({url:'pages/UserProfile',params:{userId:String(this.detail.postDetail.postUserId),userName:this.detail.postDetail.userName || ''}}); } }).backgroundColor(UiTheme.surface(this.darkTheme)).fontColor(UiTheme.primary(this.darkTheme))
         Button('官方原帖').constraintSize({ minHeight: 44 }).fontColor('#A67E17').backgroundColor(UiTheme.accentSurface(this.darkTheme)).enabled(this.detail !== undefined).onClick(() => this.official()).systemMaterial(UiTheme.button(this.materialEnabled, this.materialThickness))
       }.width('100%').padding(14)
   }
@@ -179,7 +232,12 @@ struct Post {
         Scroll() {
           Column({ space: 18 }) {
             Text(this.detail.postDetail.postTitle || '社区动态').fontSize(27).fontWeight(FontWeight.Bold).fontColor(UiTheme.primary(this.darkTheme)).width('100%')
-            Text(`${this.detail.postDetail.userName} · ${this.detail.postDetail.postTime}`).fontSize(13).fontColor(UiTheme.muted(this.darkTheme)).width('100%')
+            Text(`${this.detail.postDetail.userName} · ${this.detail.postDetail.postTime}`).fontSize(13).fontColor(UiTheme.muted(this.darkTheme)).width('100%').onClick(() => { if (this.detail) { this.getUIContext().getRouter().pushUrl({ url:'pages/UserProfile', params:{ userId:String(this.detail.postDetail.postUserId), userName:this.detail.postDetail.userName || '' } }); } })
+            if (this.detail.postDetail.videoId) {
+              PostVideo({ videoId: this.detail.postDetail.videoId || '',
+                cover: this.detail.postDetail.coverImages?.[0]?.url || '',
+                canPlay: this.detail.postDetail.canPlay !== false, reason: this.detail.postDetail.reason || '', active: this.videoVisible })
+            }
             this.blocks(this.detail.postDetail.postContent)
             Row({ space: 12 }) {
               Button(`${this.liked ? '已赞' : '点赞'} ${this.detail.postDetail.likeCount ?? 0}`).constraintSize({ minHeight: 44 }).enabled(!this.liking).backgroundColor('#16D9C9').fontColor('#202329').onClick(() => this.like()).systemMaterial(UiTheme.button(this.materialEnabled, this.materialThickness))
@@ -190,7 +248,14 @@ struct Post {
             Button(this.updatesAvailable ? '有评论更新 · 点击查看' : '刷新评论').constraintSize({ minHeight: 44 }).onClick(() => this.loadComments(true)).backgroundColor(UiTheme.accentSurface(this.darkTheme)).fontColor('#A67E17').systemMaterial(UiTheme.button(this.materialEnabled, this.materialThickness))
             ForEach(this.comments, (comment: CommentItem) => {
               Column({ space: 10 }) {
-                Text(`${comment.userName} · ${comment.commentTime}`).fontColor(UiTheme.muted(this.darkTheme)).fontSize(12).width('100%')
+                Row({ space: 10 }) {
+                  if (comment.userHeadUrl && /^https:\/\//i.test(comment.userHeadUrl)) {
+                    Image(comment.userHeadUrl).width(36).height(36).borderRadius(18).objectFit(ImageFit.Cover).onClick(() => this.openCommentAuthor(comment.userId, comment.userName, comment.userHeadUrl ?? ''))
+                  } else {
+                    Text('人').width(36).height(36).textAlign(TextAlign.Center).borderRadius(18).backgroundColor(UiTheme.control(this.darkTheme)).fontColor(UiTheme.secondary(this.darkTheme)).onClick(() => this.openCommentAuthor(comment.userId, comment.userName, ''))
+                  }
+                  Text(`${comment.userName} · ${comment.commentTime}`).fontColor(UiTheme.muted(this.darkTheme)).fontSize(12).layoutWeight(1).onClick(() => this.openCommentAuthor(comment.userId, comment.userName, comment.userHeadUrl ?? ''))
+                }.width('100%')
                 this.blocks(comment.commentContent ?? [])
                 Row({ space: 8 }) {
                   Button('回复').constraintSize({ minHeight: 44 }).fontSize(13).backgroundColor(UiTheme.surface(this.darkTheme)).fontColor(UiTheme.secondary(this.darkTheme)).onClick(() => this.target(comment.commentId, comment.userId, comment.userName)).systemMaterial(UiTheme.button(this.materialEnabled, this.materialThickness))
@@ -199,7 +264,12 @@ struct Post {
                 if (this.expandedCommentId === comment.commentId) {
                   ForEach(this.replies, (reply: ReplyItem) => {
                     Column({ space: 8 }) {
-                      Text(`${reply.userName}${reply.toUserName ? ' 回复 ' + reply.toUserName : ''} · ${reply.replyTime}`).fontSize(12).fontColor(UiTheme.muted(this.darkTheme)).width('100%')
+                      Row({ space: 8 }) {
+                        if (reply.userHeadUrl && /^https:\/\//i.test(reply.userHeadUrl)) {
+                          Image(reply.userHeadUrl).width(30).height(30).borderRadius(15).objectFit(ImageFit.Cover).onClick(() => this.openCommentAuthor(reply.userId, reply.userName, reply.userHeadUrl ?? ''))
+                        }
+                        Text(`${reply.userName}${reply.toUserName ? ' 回复 ' + reply.toUserName : ''} · ${reply.replyTime}`).fontSize(12).fontColor(UiTheme.muted(this.darkTheme)).layoutWeight(1).onClick(() => this.openCommentAuthor(reply.userId, reply.userName, reply.userHeadUrl ?? ''))
+                      }.width('100%')
                       this.blocks(reply.replyContent ?? [])
                       Button('回复').constraintSize({ minHeight: 44 }).fontSize(12).fontColor(UiTheme.secondary(this.darkTheme)).backgroundColor(UiTheme.surface(this.darkTheme)).onClick(() => this.target(comment.commentId, reply.userId, reply.userName, reply.replyId)).systemMaterial(UiTheme.button(this.materialEnabled, this.materialThickness))
                     }.width('100%').padding(10).borderRadius(10).backgroundColor(UiTheme.control(this.darkTheme))
@@ -216,9 +286,18 @@ struct Post {
       if (this.detail) {
         Column({ space: 6 }) {
           if (this.replyName) { Button(`回复 ${this.replyName} · 点击取消`).constraintSize({ minHeight: 44 }).fontSize(12).fontColor('#A67E17').backgroundColor(UiTheme.accentSurface(this.darkTheme)).onClick(() => this.target('', '', '')).systemMaterial(UiTheme.button(this.materialEnabled, this.materialThickness)) }
+          if (this.commentImage) {
+            Row({ space: 8 }) {
+              Image(this.commentImageUri || this.commentImage).width(54).height(54).objectFit(ImageFit.Cover).borderRadius(8)
+              Text('已添加图片').fontSize(12).fontColor(UiTheme.secondary(this.darkTheme))
+              Blank()
+              Button('移除图片').fontSize(12).onClick(() => { this.commentImage = ''; this.commentImageUri = ''; })
+            }.width('100%')
+          }
           Row({ space: 8 }) {
+            Button(this.imageBusy ? '上传中' : '图片').constraintSize({ minHeight: 44 }).enabled(!this.imageBusy && !this.sending && !this.commentImage).onClick(() => this.pickCommentImage()).systemMaterial(UiTheme.button(this.materialEnabled, this.materialThickness))
             TextInput({ placeholder: this.replyName ? `回复 ${this.replyName}` : '说点什么…', text: this.draft }).maxLength(1000).layoutWeight(1).height(48).enabled(!this.sending).onChange((value: string) => { this.draft = value; })
-            Button(this.sending ? '发送中' : '发送').constraintSize({ minHeight: 44 }).enabled(!this.sending && this.draft.trim().length > 0).backgroundColor('#16D9C9').fontColor('#202329').onClick(() => this.send()).systemMaterial(UiTheme.button(this.materialEnabled, this.materialThickness))
+            Button(this.sending ? '发送中' : '发送').constraintSize({ minHeight: 44 }).enabled(!this.sending && !this.imageBusy && (this.draft.trim().length > 0 || !!this.commentImage)).backgroundColor('#16D9C9').fontColor('#202329').onClick(() => this.send()).systemMaterial(UiTheme.button(this.materialEnabled, this.materialThickness))
           }.width('100%')
         }.width('100%').padding(12).backgroundColor(UiTheme.page(this.darkTheme))
       }
@@ -226,6 +305,22 @@ struct Post {
     }.width('100%').height('100%')
     }.title(this.pageHeader).titleMode(NavigationTitleMode.Mini).hideBackButton(true).hideToolBar(true).mode(NavigationMode.Stack).width('100%').height('100%')
     }
+      if (this.previewImage) {
+        Column() {
+          Row({ space: 12 }) {
+            Text('图片预览').fontSize(17).fontWeight(FontWeight.Medium).fontColor(Color.White)
+            Blank()
+            Button('✕').width(48).height(48).borderRadius(24)
+              .fontSize(20).fontColor(Color.White).backgroundColor('#553A424D')
+              .onClick(() => { this.previewImage = ''; })
+          }.width('100%').padding({ left: 22, right: 22, top: 12, bottom: 12 })
+          Row() {
+            Image(this.previewImage).width('100%').height('100%').objectFit(ImageFit.Contain)
+              .onClick(() => { this.previewImage = ''; })
+          }.layoutWeight(1).width('100%')
+        }.width('100%').height('100%').padding({ top: 62, bottom: 32 })
+          .backgroundColor('#F5090B10')
+      }
     }.width('100%').height('100%').backgroundColor(this.diagnostic ? '#9C27B0' : Color.Transparent)
       .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
   }

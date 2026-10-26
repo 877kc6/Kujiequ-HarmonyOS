@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.5.0)
-project(kujiequ_capture_probe)
-add_library(capture_probe SHARED napi_init.cpp probe.cpp)
+project(kujiequ_capture_probe LANGUAGES C CXX)
+# Pinned upstream BSD-3-Clause sources; no network downloads during DevEco build.
+set(LWIP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/lwip)
+file(GLOB LWIP_CORE ${LWIP_DIR}/src/core/*.c ${LWIP_DIR}/src/core/ipv4/*.c)
+add_library(capture_probe SHARED napi_init.cpp probe.cpp tcp_relay.cpp ${LWIP_CORE})
+target_include_directories(capture_probe PRIVATE lwip_port ${LWIP_DIR}/src/include)
 target_compile_features(capture_probe PRIVATE cxx_std_17)
 target_compile_options(capture_probe PRIVATE -Wall -Wextra)
 target_link_libraries(capture_probe PUBLIC libace_napi.z.so)

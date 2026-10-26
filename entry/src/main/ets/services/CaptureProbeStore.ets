@@ -25,6 +25,11 @@ export class CaptureProbeStore {
   }
   writeRequest(request: ProbeRequest): void { this.write('capture_probe_request.json', JSON.stringify(request)); }
   writeStatus(status: ProbeStatus): void { this.write('capture_probe_status.json', JSON.stringify(status)); }
+  confirmHttps(runId: string): void {
+    const request = this.request();
+    if (request?.runId !== runId || request.cancelled || request.mode !== 'https' || request.expiresAt <= Date.now()) { return; }
+    request.httpsPassed = true; this.writeRequest(request);
+  }
   cancel(runId: string): void {
     const request = this.request();
     if (request?.runId === runId) { request.cancelled = true; this.writeRequest(request); }

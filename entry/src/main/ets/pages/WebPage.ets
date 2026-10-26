@@ -77,6 +77,9 @@ struct WebPage {
       if (!this.active || generation !== Session.generation) { return; }
       const account = parseWebAccount(raw);
       if (!account || account.token === Session.token || account.token === this.attemptedToken) { return; }
+      // Never silently replace the encrypted native session with a different
+      // website token. Account switching requires explicit logout by the user.
+      if (Session.token && Session.userId) { return; }
       this.attemptedToken = account.token;
       await KuroApi.importWebAccount(account.token, account.userId);
       if (this.active) { this.getUIContext().getPromptAction().showToast({ message: '账号已连接，返回后可查看游戏数据' }); }

@@ -1,0 +1,1 @@
+Run Update.cmd from the extracted Kujiequ folder. Select your EXISTING project root in the folder dialog. The updater backs up replaced files next to the existing project. Windows PowerShell 5.1 compatible; script is ASCII to prevent encoding errors. Keep both files together.

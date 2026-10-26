@@ -2,8 +2,8 @@
   "app": {
     "bundleName": "com.kevin.kujiequ",
     "vendor": "Kevin",
-    "versionCode": 1006001,
-    "versionName": "1.6.1-probe",
+    "versionCode": 1008014,
+    "versionName": "1.8.14",
     "icon": "$media:app_icon",
     "label": "$string:app_name"
   }

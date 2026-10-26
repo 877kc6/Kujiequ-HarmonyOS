@@ -19,11 +19,11 @@ const kits = {
   '@kit.NetworkKit': {
     VpnExtensionAbility: class { context = { filesDir: dir, applicationInfo: { name: 'com.kevin.custompackage' } }; },
     vpnExtension: {
-      createVpnConnection: () => ({create: c => { lastConfig = c; events.push('create'); return create(); }, destroy: () => { events.push('destroy'); return destroy(); }}),
+      createVpnConnection: () => ({protect: async fd => { events.push('protect'); assert.equal(fd,42); }, create: c => { lastConfig = c; events.push('create'); return create(); }, destroy: () => { events.push('destroy'); return destroy(); }}),
       stopVpnExtensionAbility: async () => { events.push('stop'); }
     }
   },
-  'libcapture_probe.so': { run: (...args) => { events.push('native'); return native(...args); }, cancel: () => events.push('cancel') }
+  'libcapture_probe.so': { confirmHttps: () => events.push('confirmHttps'), runHttps: (...args) => { events.push('nativeHttps'); return native(...args); }, prepareInternet: () => { events.push('prepareInternet'); return 42; }, closeInternet: () => events.push('closeInternet'), runInternet: (...args) => { events.push('nativeInternet'); return native(...args); }, runTcp: (...args) => { events.push('nativeTcp'); return native(...args); }, run: (...args) => { events.push('native'); return native(...args); }, cancel: () => events.push('cancel') }
 };
 const cache = new Map();
 function load(file) {
@@ -69,6 +69,29 @@ function reset() {
     assert.equal(lastConfig.routes[0].isDefaultRoute,false);
     assert.equal(lastConfig.dnsAddresses,undefined);
     assert(events.indexOf('native') < events.indexOf('destroy'));
+    reset(); store.writeRequest({runId:id,expiresAt:Date.now()+60000,cancelled:false,mode:'tcp'});
+    ability = new CaptureProbeAbility(); ability.onCreate(want); await waitFor(()=>events.includes('stop'));
+    assert(events.includes('nativeTcp')); assert(!events.includes('native'));
+    assert.equal(store.status().mode,'tcp'); assert.equal(store.status().phase,'passed');
+    assert(events.indexOf('nativeTcp') < events.indexOf('destroy'));
+    reset(); store.writeRequest({runId:id,expiresAt:Date.now()+60000,cancelled:false,mode:'internet'});
+    ability = new CaptureProbeAbility(); ability.onCreate(want); await waitFor(()=>events.includes('stop'));
+    assert.equal(store.status().mode,'internet'); assert.equal(store.status().phase,'passed');
+    assert(events.indexOf('prepareInternet') < events.indexOf('protect'));
+    assert(events.indexOf('protect') < events.indexOf('nativeInternet'));
+    assert(events.indexOf('nativeInternet') < events.indexOf('closeInternet'));
+    assert(events.indexOf('closeInternet') < events.indexOf('destroy'));
+    reset(); store.writeRequest({runId:id,expiresAt:Date.now()+60000,cancelled:false,mode:'https'});
+    let completeHttps; native = () => new Promise(r => completeHttps = r);
+    ability = new CaptureProbeAbility(); ability.onCreate(want); await waitFor(()=>events.includes('nativeHttps'));
+    assert(events.indexOf('protect') < events.indexOf('nativeHttps'));
+    await new Promise(r=>setTimeout(r,120)); assert(!events.includes('confirmHttps'));
+    store.confirmHttps(id); await waitFor(()=>events.includes('confirmHttps'));
+    completeHttps({code:0,packets:5,bytes:300}); await waitFor(()=>events.includes('stop'));
+    assert.equal(store.status().mode,'https'); assert.equal(store.status().phase,'passed');
+    reset(); store.writeRequest({runId:id,expiresAt:Date.now()+60000,cancelled:false,mode:'game'});
+    ability = new CaptureProbeAbility(); ability.onCreate(want); await waitFor(()=>events.includes('stop'));
+    assert(!events.includes('create')); assert.equal(store.status().phase,'cancelled');
     reset(); store.cancel(id); ability = new CaptureProbeAbility(); ability.onCreate(want);
     await waitFor(()=>events.includes('stop')); assert(!events.includes('create'));
     assert.equal(store.status().phase,'cancelled');

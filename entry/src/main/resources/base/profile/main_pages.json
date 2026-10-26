@@ -8,6 +8,7 @@
     "pages/History",
     "pages/AccountList",
     "pages/Compose",
-    "pages/CaptureProbe"
+    "pages/CaptureProbe",
+    "pages/UserProfile"
   ]
 }

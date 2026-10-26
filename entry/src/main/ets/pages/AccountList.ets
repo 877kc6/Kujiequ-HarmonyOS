@@ -18,6 +18,8 @@ struct AccountList {
   @State message: string = '';
   @State authRejected: boolean = false;
   @State hasNext: boolean = true;
+  @State deletingId: string = '';
+  private postsStamp: number = 0;
   @State refreshing: boolean = false;
   @State loggedIn: boolean = false;
   private page: number = 0;
@@ -30,12 +32,14 @@ struct AccountList {
   }
   onPageShow(): void {
     this.loggedIn = !!Session.token;
+    const stamp = AppStorage.get<number>('myPostsChangedAt') || 0;
+    if (this.kind === 'posts' && stamp !== this.postsStamp) { this.page = 0; this.postsStamp = stamp; }
     if (this.accountId !== Session.userId) { this.rows = []; this.page = 0; this.accountId = Session.userId; }
-    if (this.loggedIn && this.page === 0) { this.load(true); }
+    if (this.loggedIn) { this.load(true); }
   }
   onPageHide(): void { this.sequence++; this.busy = false; this.refreshing = false; }
-  private async load(reset: boolean): Promise<void> {
-    if (this.busy || !Session.token) { this.refreshing = false; return; }
+  private async load(reset: boolean, afterDelete: boolean = false): Promise<void> {
+    if (this.busy || !Session.token || (!!this.deletingId && !afterDelete)) { this.refreshing = false; return; }
     const seq = ++this.sequence; const user = Session.userId; const next = reset ? 1 : this.page + 1;
     this.busy = true; this.message = ''; this.authRejected = false;
     try {
@@ -47,8 +51,33 @@ struct AccountList {
     } catch (e) { if (seq === this.sequence) { this.message = (e as Error).message || '请求失败，请重试'; this.authRejected = (e as ApiError).code === 220 || (e as ApiError).code === 221; } }
     finally { if (seq === this.sequence) { this.busy = false; this.refreshing = false; } }
   }
+  private openPerson(item: AccountRow): void {
+    const target: string = String(item.ownerId || item.key);
+    if (!/^\d{1,24}$/.test(target)) { this.message = '这条记录没有有效用户 ID'; return; }
+    this.getUIContext().getRouter().pushUrl({ url: 'pages/UserProfile', params: {
+      userId: target, userName: item.title, avatar: item.avatar
+    } });
+  }
   private open(item: AccountRow): void {
     if (/^\d{1,24}$/.test(item.postId)) { this.getUIContext().getRouter().pushUrl({ url: 'pages/Post', params: { postId: item.postId } }); }
+  }
+  private confirmDelete(item: AccountRow): void {
+    if (this.kind !== 'posts' || this.deletingId || this.busy || this.accountId !== Session.userId) { return; }
+    this.getUIContext().showAlertDialog({ title: '删除帖子', message: '确认删除这篇帖子？服务器删除后无法通过本应用恢复。',
+      primaryButton: { value: '取消', action: () => {} },
+      secondaryButton: { value: '删除', fontColor: '#D84A3E', action: () => this.removePost(item) } });
+  }
+  private async removePost(item: AccountRow): Promise<void> {
+    if (this.deletingId || this.kind !== 'posts' || this.accountId !== Session.userId) { return; }
+    this.deletingId = item.postId; const account = Session.userId;
+    try {
+      await KuroApi.deletePost(item.postId);
+      if (account !== Session.userId) { return; }
+      AppStorage.setOrCreate('myPostsChangedAt', Date.now());
+      this.rows = this.rows.filter((r: AccountRow): boolean => r.postId !== item.postId);
+      await this.load(true, true); this.message = '帖子已删除';
+    } catch (e) { if (account === Session.userId) { this.message = (e as Error).message + '；请刷新确认服务器状态，避免重复操作'; } }
+    finally { this.deletingId = ''; }
   }
   @Builder
   card(item: AccountRow) {
@@ -59,13 +88,28 @@ struct AccountList {
           Text(item.name).fontSize(13).fontColor(UiTheme.primary(this.darkTheme))
           if (item.time) { Text(item.time).fontSize(11).fontColor(UiTheme.muted(this.darkTheme)) }
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+        if (this.kind === 'posts' && item.postId) {
+          Button(this.deletingId === item.postId ? '删除中' : '删除').height(32).borderRadius(16).fontSize(12)
+            .fontColor('#D84A3E').backgroundColor(UiTheme.warningSurface(this.darkTheme)).enabled(!this.deletingId && !this.busy)
+            .onClick(() => { this.confirmDelete(item); })
+        }
+        if (this.kind === 'fans' || this.kind === 'follows') {
+          Text('查看主页 ›').fontSize(13).fontColor('#16D9C9').onClick(() => this.openPerson(item))
+        }
         if (item.unread) { Text('未读').fontSize(11).fontColor('#119A8E') }
-      }.width('100%')
+      }.width('100%').onClick(() => {
+        if (this.kind === 'fans' || this.kind === 'follows') { this.openPerson(item); }
+      })
       Text(item.title).fontSize(17).fontWeight(FontWeight.Medium).fontColor(UiTheme.primary(this.darkTheme)).width('100%')
       if (item.text) { Text(item.text).fontSize(14).fontColor(UiTheme.secondary(this.darkTheme)).width('100%').maxLines(8) }
       if (item.cover) { Image(item.cover).height(170).width('100%').objectFit(ImageFit.Cover).borderRadius(12) }
-      if (item.postId) { Text('查看帖子及评论  ›').fontSize(12).fontColor('#119A8E').width('100%') }
-    }.padding(16).width('100%').borderRadius(18).backgroundColor(UiTheme.surface(this.darkTheme)).onClick(() => this.open(item))
+      if (this.kind === 'fans' || this.kind === 'follows') {
+        Button(this.kind === 'follows' ? '打开主页 · 取关' : '打开主页 · 关注')
+          .fontColor(UiTheme.primary(this.darkTheme)).backgroundColor(UiTheme.control(this.darkTheme))
+          .onClick(() => this.openPerson(item))
+      }
+      if (item.postId) { Text('查看帖子及评论  ›').fontSize(12).fontColor('#119A8E').width('100%').onClick(() => this.open(item)) }
+    }.padding(16).width('100%').borderRadius(18).backgroundColor(UiTheme.surface(this.darkTheme))
   }
   build() {
     Stack() {
@@ -74,7 +118,7 @@ struct AccountList {
         Row({ space: 12 }) {
           Button('返回').height(44).fontColor(UiTheme.primary(this.darkTheme)).backgroundColor(UiTheme.surface(this.darkTheme)).onClick(() => this.getUIContext().getRouter().back())
           Text(this.title).fontSize(24).fontWeight(FontWeight.Bold).fontColor(UiTheme.primary(this.darkTheme)).layoutWeight(1)
-          Button('刷新').height(44).enabled(!this.busy && this.loggedIn).fontColor(UiTheme.primary(this.darkTheme)).backgroundColor(UiTheme.surface(this.darkTheme)).onClick(() => this.load(true))
+          Button('刷新').height(44).enabled(!this.busy && !this.deletingId && this.loggedIn).fontColor(UiTheme.primary(this.darkTheme)).backgroundColor(UiTheme.surface(this.darkTheme)).onClick(() => this.load(true))
         }.padding({ left: 16, right: 16 }).width('100%')
         if (!this.loggedIn) {
           Text('登录后查看账号内容').fontColor(UiTheme.secondary(this.darkTheme)).padding(24)

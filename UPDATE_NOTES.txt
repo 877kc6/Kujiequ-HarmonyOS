@@ -1,0 +1,4 @@
+v1.8.14 Comment author avatars and native profiles.
+Image comment experimental; server API needs verification.
+Comment deletion endpoint not verified.
+Update.cmd: success closes, errors logged.

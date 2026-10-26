@@ -40,10 +40,11 @@ for p in (ETSDIR/'pages').glob('*.ets'):
 for p in ETSDIR.rglob('*.ets'):
     if p.name != 'EntryAbility.ets': assert 'setWindowLayoutFullScreen(' not in p.read_text(), p
 updater=(ROOT/'Apply_Update.ps1').read_text(encoding='utf-8-sig')
+# Full-source updater enumerates all project files, rather than a hard-coded file list.
+for marker in ['Get-ChildItem -LiteralPath $source -Recurse -File', 'Copy-Item -LiteralPath $file.FullName', '$backup']:
+    assert marker in updater, marker
 for f in ['entry/src/main/ets/pages/AccountList.ets','entry/src/main/ets/components/SafePage.ets',
           'entry/src/main/ets/services/AccountData.ets','entry/src/main/resources/base/profile/main_pages.json']:
-    assert f in updater
-for f in re.findall(r"^    '([^']+)'",updater,re.M):
     assert (ROOT/f).is_file(), f
 index=(ETSDIR/'pages/Index.ets').read_text()
 assert "Button('主题与背景')" not in index
@@ -84,3 +85,11 @@ assert 'prefixLength: 32' in vpn and 'dnsAddresses' not in vpn
 assert 'AppStorage' not in vpn
 assert "phase = 'passed'" not in (ETSDIR/'pages/CaptureProbe.ets').read_text()
 print('PASS: native diagnostic build wiring, private VPN extension, own-app scope, no default route/DNS, no UI-only success')
+
+# Version 1.8.4 editor behavior guardrails
+compose_source = (ROOT / 'entry/src/main/ets/pages/Compose.ets').read_text(encoding='utf-8')
+media_source = (ROOT / 'entry/src/main/ets/services/MediaApi.ets').read_text(encoding='utf-8')
+assert 'onBackPress(): boolean' in compose_source and 'this.requestLeave(); return true;' in compose_source
+assert all(x in compose_source for x in ["value: '继续编辑'", "value: '不保存'", "value: '保存草稿'", '发现已保存的草稿', 'this.discardAndLeave()'])
+assert "('/forum/video/prePublish'" not in media_source or '视频上传授权（原生协议重试）' in media_source
+print('PASS: 1.8.4 draft exit/restore controls and video 220 recovery are present')
